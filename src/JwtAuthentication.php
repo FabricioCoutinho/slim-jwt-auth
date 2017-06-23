@@ -50,7 +50,8 @@ class JwtAuthentication
         "path" => null,
         "passthrough" => null,
         "callback" => null,
-        "error" => null
+        "error" => null,
+        "validated" => null
     ];
 
     /**
@@ -97,6 +98,20 @@ class JwtAuthentication
 
         /* If rules say we should not authenticate call next and return. */
         if (false === $this->shouldAuthenticate($request)) {
+            /* Get token if exist and valid and call validated
+            if validated returns false return with 401 Unauthorized. */
+            if (is_callable($this->options["validated"])) {
+                if (!(false === $token = $this->fetchToken($request))) {
+                    if (!(false === $decoded = $this->decodeToken($token))) {
+                        $params = ["decoded" => $decoded];
+                        if (false === $this->options["validated"]($request, $response, $params)) {
+                            return $this->error($request, $response, [
+                                "message" => $this->message ? $this->message : "Validated returned false"
+                            ])->withStatus(401);
+                        }
+                    }
+                }
+            }
             return $next($request, $response);
         }
 
@@ -662,6 +677,27 @@ class JwtAuthentication
     public function setAlgorithm($algorithm)
     {
         $this->options["algorithm"] = $algorithm;
+        return $this;
+    }
+    /**
+     * Get the validated
+     *
+     * @return callable
+     */
+    public function getValidated()
+    {
+        return $this->options["validated"];
+    }
+
+    /**
+     * Set the validated
+     *
+     * @param callable $validated
+     * @return self
+     */
+    public function setValidated($validated)
+    {
+        $this->options["validated"] = $validated->bindTo($this);
         return $this;
     }
 }
